@@ -1,0 +1,19 @@
+{
+  "name": "mini-image",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node src/index.js test-img"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "canvas": "^3.1.0",
+    "globby": "^14.1.0",
+    "sharp": "^0.34.2"
+  }
+}
