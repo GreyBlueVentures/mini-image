@@ -2,49 +2,20 @@ import path from "path";
 import { globby } from "globby";
 import sharp from "sharp";
 
-async function convertImage(filePath, sourceDir) {
+async function convertImage(filePath, sourceDir, targetFormat) {
   const imageName = path.basename(filePath).split(".")[0];
-  const outputPath = path.join(sourceDir, `${imageName}.webp`);
+  const outputPath = path.join(sourceDir, `${imageName}.${targetFormat}`);
 
-  await sharp(filePath).toFormat("webp").toFile(outputPath);
-
-  //   const img = await loadImage(filePath);
-  //   console.log(`Processing image: ${imageName}`);
-  //   const { width, height } = img;
-  //   const aspectRatio = width / height;
-  //   let newWidth = width;
-  //   let newHeight = height;
-
-  //   const resolution = {
-  //     length: 1080,
-  //     breadth: 1920,
-  //   };
-  //   if (width > height) {
-  //     newWidth = Math.min(resolution.breadth, width);
-  //     newHeight = Math.min(resolution.length, height);
-  //   } else {
-  //     newWidth = Math.min(resolution.length, width);
-  //     newHeight = Math.min(resolution.breadth, height);
-  //   }
-  //   if (newHeight * aspectRatio > newWidth) {
-  //     newHeight = newWidth / aspectRatio;
-  //   } else {
-  //     newWidth = newHeight * aspectRatio;
-  //   }
-
-  //   const canvas = createCanvas(newWidth, newHeight);
-  //   canvas.width = newWidth;
-  //   canvas.height = newHeight;
-  //   const ctx = canvas.getContext("2d");
-  //   ctx.drawImage(img, 0, 0, newWidth, newHeight);
-  //   const buffer = canvas.toBuffer("image/webp", { quality: 0.8 });
-
-  //   const buffer = Buffer.from(await outputBlob.arrayBuffer());
-
-  console.log(`Converting image: ${filePath}`);
+  await sharp(filePath).toFormat(targetFormat).toFile(outputPath);
+  console.log(`Converting image: ${filePath}, output: ${outputPath}`);
+  return {
+    original: filePath,
+    converted: outputPath,
+    format: targetFormat,
+  };
 }
 
-async function processImages(sourceDir) {
+async function processImages(sourceDir, targetFormat) {
   /** Fetch all images in source directory */
   const imageFiles = await globby([
     `${sourceDir}/**/*.{png,jpg,jpeg}`,
@@ -54,10 +25,27 @@ async function processImages(sourceDir) {
   const convertedImages = [];
   /** Convert each image to specified format */
   for (const file of imageFiles) {
-    const convertedImage = await convertImage(file, sourceDir);
+    const convertedImage = await convertImage(file, sourceDir, targetFormat);
     convertedImages.push(convertedImage);
   }
   return convertedImages;
+}
+
+function getTargetFormat(optionFlags = "") {
+  if (optionFlags.includes("--webp")) {
+    return "webp";
+  } else if (optionFlags.includes("--avif")) {
+    return "avif";
+  } else if (optionFlags.includes("--jpeg")) {
+    return "jpeg";
+  } else if (optionFlags.includes("--png")) {
+    return "png";
+  } else {
+    console.error(
+      "Invalid format option. Use --webp, --avif, --jpeg, or --png."
+    );
+    process.exit(1);
+  }
 }
 
 async function main() {
@@ -66,13 +54,17 @@ async function main() {
    * 2. Replace converted image paths in specified files
    */
   const sourceDir = process.argv[2];
-  const targetDir = process.argv[3];
+  const optionFlags = process.argv[3];
+
+  const targetFormat = getTargetFormat(optionFlags);
+
   if (!sourceDir) {
     console.error("Usage: node index.js <sourceDir> <targetDir>");
     process.exit(1);
   }
 
-  const processedImages = await processImages(sourceDir);
+  const processedImages = await processImages(sourceDir, targetFormat);
+  console.log("Processed images:", processedImages);
 }
 
 main();
