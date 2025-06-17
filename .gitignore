@@ -1,3 +1,4 @@
-test-img
-node_modules
+test-img/
+node_modules/
 package-lock.json
+source-files/

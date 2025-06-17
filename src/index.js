@@ -1,6 +1,7 @@
 import path from "path";
 import { globby } from "globby";
 import sharp from "sharp";
+import fs from "fs";
 
 async function convertImage(filePath, sourceDir, targetFormat) {
   const imageName = path.basename(filePath).split(".")[0];
@@ -13,6 +14,48 @@ async function convertImage(filePath, sourceDir, targetFormat) {
     converted: outputPath,
     format: targetFormat,
   };
+}
+
+function replaceImagePaths(rootDir, conversions) {
+  const allFiles = fs.readdirSync(rootDir, { withFileTypes: true });
+
+  for (const file of allFiles) {
+    const currentFilePath = path.join(rootDir, file.name);
+
+    if (file.isDirectory()) {
+      replaceImagePaths(currentFilePath, conversions);
+    } else if (/\.(js|ts|jsx|tsx)$/.test(file.name)) {
+      let currentFileContent = fs.readFileSync(currentFilePath, "utf-8");
+      let isContentModified = false;
+
+      for (const conversion of conversions) {
+        const { original, converted, format } = conversion;
+        if (converted == original) continue;
+
+        const originalRelativePath = path.relative(rootDir, original);
+
+        const convertedRelativePath = path.relative(rootDir, converted);
+
+        const pattern = new RegExp(
+          originalRelativePath.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"),
+          "g"
+        );
+        if (pattern.test(currentFileContent)) {
+          console.log(
+            `→ Match: replacing ${originalRelativePath} with ${convertedRelativePath}`
+          );
+          currentFileContent = currentFileContent.replace(
+            pattern,
+            convertedRelativePath
+          );
+          isContentModified = true;
+        }
+      }
+
+      if (isContentModified)
+        fs.writeFileSync(currentFilePath, currentFileContent);
+    }
+  }
 }
 
 async function processImages(sourceDir, targetFormat) {
@@ -64,7 +107,7 @@ async function main() {
   }
 
   const processedImages = await processImages(sourceDir, targetFormat);
-  console.log("Processed images:", processedImages);
+  replaceImagePaths(path.resolve("./source-files"), processedImages);
 }
 
 main();
