@@ -8,7 +8,9 @@ async function convertImage(filePath, sourceDir, targetFormat) {
   const outputPath = path.join(sourceDir, `${imageName}.${targetFormat}`);
 
   await sharp(filePath).toFormat(targetFormat).toFile(outputPath);
-  console.log(`Converting image: ${filePath}, output: ${outputPath}`);
+
+  console.log(`[Mini-Image] Converting image: ${filePath}`);
+
   return {
     original: filePath,
     converted: outputPath,
@@ -42,7 +44,7 @@ function replaceImagePaths(rootDir, conversions) {
         );
         if (pattern.test(currentFileContent)) {
           console.log(
-            `→ Match: replacing ${originalRelativePath} with ${convertedRelativePath}`
+            `[Mini-Image] Replacing ${originalRelativePath} with ${convertedRelativePath}`
           );
           currentFileContent = currentFileContent.replace(
             pattern,
@@ -79,14 +81,8 @@ function getTargetFormat(optionFlags = "") {
     return "webp";
   } else if (optionFlags.includes("--avif")) {
     return "avif";
-  } else if (optionFlags.includes("--jpeg")) {
-    return "jpeg";
-  } else if (optionFlags.includes("--png")) {
-    return "png";
   } else {
-    console.error(
-      "Invalid format option. Use --webp, --avif, --jpeg, or --png."
-    );
+    console.error("Invalid format option. Use --webp, --avif");
     process.exit(1);
   }
 }
@@ -97,8 +93,8 @@ async function main() {
    * 2. Replace converted image paths in specified files
    */
   const sourceDir = process.argv[2];
-  const optionFlags = process.argv[3];
-
+  const targetDir = process.argv[3];
+  const optionFlags = process.argv[4];
   const targetFormat = getTargetFormat(optionFlags);
 
   if (!sourceDir) {
@@ -107,7 +103,15 @@ async function main() {
   }
 
   const processedImages = await processImages(sourceDir, targetFormat);
-  replaceImagePaths(path.resolve("./source-files"), processedImages);
+
+  if (!targetDir) {
+    console.log(
+      "[Mini-Image] No target directory specified, skipping path replacement."
+    );
+    return;
+  }
+
+  replaceImagePaths(path.resolve(path.join("./", targetDir)), processedImages);
 }
 
 main();
