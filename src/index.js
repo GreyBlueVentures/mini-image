@@ -1,8 +1,41 @@
+#!/usr/bin/env node
+
 import path from "path";
 import { globby } from "globby";
 import sharp from "sharp";
 import fs from "fs";
 
+/**
+ * Parse CLI args 
+ */
+function parseArgs(rawArgs) {
+  const args = rawArgs.slice(2);
+  const positional = [];
+  const flags = {};
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+
+    if (arg.startsWith("--")) {
+      const key = arg.slice(2);
+      const next = args[i + 1];
+      if (!next || next.startsWith("--")) {
+        flags[key] = true;
+      } else {
+        flags[key] = next;
+        i++;
+      }
+    } else {
+      positional.push(arg);
+    }
+  }
+
+  return { positional, flags };
+}
+
+/**
+ * Convert a single image file
+ */
 async function convertImage(filePath, sourceDir, targetFormat) {
   const imageName = path.basename(filePath).split(".")[0];
   const outputPath = path.join(sourceDir, `${imageName}.${targetFormat}`);
@@ -18,6 +51,9 @@ async function convertImage(filePath, sourceDir, targetFormat) {
   };
 }
 
+/**
+ * Replace original image paths with converted ones
+ */
 function replaceImagePaths(rootDir, conversions) {
   const allFiles = fs.readdirSync(rootDir, { withFileTypes: true });
 
@@ -31,17 +67,17 @@ function replaceImagePaths(rootDir, conversions) {
       let isContentModified = false;
 
       for (const conversion of conversions) {
-        const { original, converted, format } = conversion;
-        if (converted == original) continue;
+        const { original, converted } = conversion;
+        if (converted === original) continue;
 
         const originalRelativePath = path.relative(rootDir, original);
-
         const convertedRelativePath = path.relative(rootDir, converted);
 
         const pattern = new RegExp(
           originalRelativePath.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"),
           "g"
         );
+
         if (pattern.test(currentFileContent)) {
           console.log(
             `[Mini-Image] Replacing ${originalRelativePath} with ${convertedRelativePath}`
@@ -60,61 +96,64 @@ function replaceImagePaths(rootDir, conversions) {
   }
 }
 
+/**
+ * Convert all images in the directory
+ */
 async function processImages(sourceDir, targetFormat) {
-  /** Fetch all images in source directory */
   const imageFiles = await globby([
     `${sourceDir}/**/*.{png,jpg,jpeg}`,
     "!node_modules",
   ]);
 
   const convertedImages = [];
-  /** Convert each image to specified format */
+
   for (const file of imageFiles) {
     const convertedImage = await convertImage(file, sourceDir, targetFormat);
     convertedImages.push(convertedImage);
   }
+
   return convertedImages;
 }
 
-function getTargetFormat(optionFlags = "") {
-  if (optionFlags.includes("--webp")) {
-    return "webp";
-  } else if (optionFlags.includes("--avif")) {
-    return "avif";
-  } else {
-    console.error("Invalid format option. Use --webp, --avif");
-    process.exit(1);
-  }
+/**
+ * Determine which format is selected
+ */
+function getTargetFormat(flags) {
+  if (flags.webp) return "webp";
+  if (flags.avif) return "avif";
+
+  console.error("[Mini-Image] Please provide --webp or --avif");
+  process.exit(1);
 }
 
+/**
+ * Main entry
+ */
 async function main() {
-  /**
-   * 1. Convert images
-   * 2. Replace converted image paths in specified files
-   */
-  const sourceDir = process.argv[2];
-  const targetDir = process.argv[3];
-  const optionFlags = process.argv[4];
-  const targetFormat = getTargetFormat(optionFlags);
+  const { positional, flags } = parseArgs(process.argv);
+  const sourceDir = positional[0];
+  const targetDir = positional[1];
 
   if (!sourceDir) {
-    console.error("Usage: node index.js <sourceDir> <targetDir>");
+    console.error("Usage: mini-image <sourceDir> <targetDir?> --webp|--avif");
     process.exit(1);
   }
+
+  const targetFormat = getTargetFormat(flags);
 
   const processedImages = await processImages(sourceDir, targetFormat);
 
   if (!targetDir) {
     console.log(
-      "[Mini-Image] No target directory specified, skipping path replacement."
+      "[Mini-Image] No target directory provided. Skipping replacements."
     );
     return;
   }
 
-  replaceImagePaths(path.resolve(path.join("./", targetDir)), processedImages);
+  replaceImagePaths(path.resolve(targetDir), processedImages);
 }
 
 main().catch((err) => {
-  console.error("[Image Optimizer] Failed:", err);
+  console.error("[Mini-Image] Failed:", err);
   process.exit(1);
 });

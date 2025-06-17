@@ -9,6 +9,9 @@
     "convert:webp": "node src/index.js test-img source-files --webp",
     "convert:avif": "node src/index.js test-img --avif"
   },
+  "bin": {
+    "mini-image": "./src/index.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
