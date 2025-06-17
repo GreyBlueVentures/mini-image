@@ -114,4 +114,7 @@ async function main() {
   replaceImagePaths(path.resolve(path.join("./", targetDir)), processedImages);
 }
 
-main();
+main().catch((err) => {
+  console.error("[Image Optimizer] Failed:", err);
+  process.exit(1);
+});
