@@ -6,7 +6,7 @@ import sharp from "sharp";
 import fs from "fs";
 
 /**
- * Parse CLI args 
+ * Parse CLI args
  */
 function parseArgs(rawArgs) {
   const args = rawArgs.slice(2);
@@ -36,9 +36,15 @@ function parseArgs(rawArgs) {
 /**
  * Convert a single image file
  */
-async function convertImage(filePath, sourceDir, targetFormat) {
+async function convertImage(filePath, sourceDir, targetDir, targetFormat) {
   const imageName = path.basename(filePath).split(".")[0];
-  const outputPath = path.join(sourceDir, `${imageName}.${targetFormat}`);
+  let outputDir = targetDir || sourceDir;
+
+  if (!fs.existsSync(outputDir) || !fs.statSync(outputDir).isDirectory()) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  const outputPath = path.join(outputDir, `${imageName}.${targetFormat}`);
 
   await sharp(filePath).toFormat(targetFormat).toFile(outputPath);
 
@@ -54,44 +60,47 @@ async function convertImage(filePath, sourceDir, targetFormat) {
 /**
  * Replace original image paths with converted ones
  */
-function replaceImagePaths(rootDir, conversions) {
+function replaceImagePaths(rootDir, conversions, aliasPathSymbol, rootPath) {
   const allFiles = fs.readdirSync(rootDir, { withFileTypes: true });
 
   for (const file of allFiles) {
     const currentFilePath = path.join(rootDir, file.name);
 
     if (file.isDirectory()) {
-      replaceImagePaths(currentFilePath, conversions);
+      replaceImagePaths(
+        currentFilePath,
+        conversions,
+        aliasPathSymbol,
+        rootPath
+      );
     } else if (/\.(js|ts|jsx|tsx)$/.test(file.name)) {
       let currentFileContent = fs.readFileSync(currentFilePath, "utf-8");
-      let isContentModified = false;
 
       for (const conversion of conversions) {
         const { original, converted } = conversion;
         if (converted === original) continue;
 
-        const originalRelativePath = path.relative(rootDir, original);
-        const convertedRelativePath = path.relative(rootDir, converted);
-
-        const pattern = new RegExp(
-          originalRelativePath.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"),
-          "g"
-        );
-
-        if (pattern.test(currentFileContent)) {
-          console.log(
-            `[Mini-Image] Replacing ${originalRelativePath} with ${convertedRelativePath}`
+        let normalisedOriginalPath = original,
+          normalisedConvertedPath = converted;
+          
+          /** Does not works for combination of relative paths and alias */
+        if (aliasPathSymbol && rootPath && original.includes(rootPath)) {
+          normalisedOriginalPath = original.replace(rootPath, aliasPathSymbol);
+          normalisedConvertedPath = converted.replace(
+            rootPath,
+            aliasPathSymbol
           );
-          currentFileContent = currentFileContent.replace(
-            pattern,
-            convertedRelativePath
-          );
-          isContentModified = true;
         }
+        console.log(
+          `[Mini-Image] Replacing ${normalisedOriginalPath} with ${normalisedConvertedPath}`
+        );
+        currentFileContent = currentFileContent.replace(
+          normalisedOriginalPath,
+          normalisedConvertedPath
+        );
       }
-
-      if (isContentModified)
-        fs.writeFileSync(currentFilePath, currentFileContent);
+      console.log(currentFilePath);
+      fs.writeFileSync(currentFilePath, currentFileContent);
     }
   }
 }
@@ -99,7 +108,7 @@ function replaceImagePaths(rootDir, conversions) {
 /**
  * Convert all images in the directory
  */
-async function processImages(sourceDir, targetFormat) {
+async function processImages(sourceDir, targetDir, targetFormat) {
   const imageFiles = await globby([
     `${sourceDir}/**/*.{png,jpg,jpeg}`,
     "!node_modules",
@@ -108,7 +117,12 @@ async function processImages(sourceDir, targetFormat) {
   const convertedImages = [];
 
   for (const file of imageFiles) {
-    const convertedImage = await convertImage(file, sourceDir, targetFormat);
+    const convertedImage = await convertImage(
+      file,
+      sourceDir,
+      targetDir,
+      targetFormat
+    );
     convertedImages.push(convertedImage);
   }
 
@@ -133,24 +147,43 @@ async function main() {
   const { positional, flags } = parseArgs(process.argv);
   const sourceDir = positional[0];
   const targetDir = positional[1];
-
+  const replacementDir = positional[2];
+  const aliasPathSymbol = positional[3];
+  const rootPath = positional[4];
+  if (aliasPathSymbol && !rootPath) {
+    console.error(
+      "[Mini-Image] If you provide an aliasPathSymbol, you must also provide a rootPath."
+    );
+    process.exit(1);
+  }
   if (!sourceDir) {
-    console.error("Usage: mini-image <sourceDir> <targetDir?> --webp|--avif");
+    console.error(
+      "Usage: mini-image <sourceDir> <replacementDir?>  --webp|--avif"
+    );
     process.exit(1);
   }
 
   const targetFormat = getTargetFormat(flags);
 
-  const processedImages = await processImages(sourceDir, targetFormat);
+  const processedImages = await processImages(
+    sourceDir,
+    targetDir,
+    targetFormat
+  );
 
-  if (!targetDir) {
+  if (!replacementDir) {
     console.log(
       "[Mini-Image] No target directory provided. Skipping replacements."
     );
     return;
   }
-
-  replaceImagePaths(path.resolve(targetDir), processedImages);
+  console.log(processedImages);
+  replaceImagePaths(
+    path.resolve(replacementDir),
+    processedImages,
+    aliasPathSymbol,
+    rootPath
+  );
 }
 
 main().catch((err) => {

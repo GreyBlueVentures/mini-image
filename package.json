@@ -1,12 +1,12 @@
 {
-  "name": "mini-image",
+  "name": "min-image-cli",
   "version": "1.0.0",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node src/index.js test-img",
-    "convert:webp": "node src/index.js test-img source-files --webp",
+    "start": "node source-files/nested-folder/index",
+    "convert:webp": "node src/index.js src/test-img source-files --webp",
     "convert:avif": "node src/index.js test-img --avif"
   },
   "bin": {
